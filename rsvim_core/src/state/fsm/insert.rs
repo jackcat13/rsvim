@@ -15,6 +15,31 @@ use tracing::trace;
 /// The finite-state-machine for insert mode.
 pub struct InsertStateful {}
 
+impl Stateful for InsertStateful {
+  fn handle(&self, data_access: StatefulDataAccess) -> StatefulValue {
+    if let Some(op) = self.get_operation(&data_access) {
+      return self.handle_op(data_access, op);
+    }
+
+    StatefulValue::InsertMode(InsertStateful::default())
+  }
+
+  fn handle_op(&self, data_access: StatefulDataAccess, op: Operation) -> StatefulValue {
+    match op {
+      Operation::GotoNormalMode => self.goto_normal_mode(&data_access),
+      Operation::CursorMoveBy((_, _))
+      | Operation::CursorMoveUpBy(_)
+      | Operation::CursorMoveDownBy(_)
+      | Operation::CursorMoveLeftBy(_)
+      | Operation::CursorMoveRightBy(_)
+      | Operation::CursorMoveTo((_, _)) => self.cursor_move(&data_access, op),
+      Operation::CursorInsert(text) => self.cursor_insert(&data_access, text),
+      Operation::CursorDelete(n) => self.cursor_delete(&data_access, n),
+      _ => unreachable!(),
+    }
+  }
+}
+
 impl InsertStateful {
   fn get_operation(&self, data_access: &StatefulDataAccess) -> Option<Operation> {
     let event = &data_access.event;
@@ -61,101 +86,53 @@ impl InsertStateful {
       Event::Resize(_columns, _rows) => None,
     }
   }
-}
 
-impl Stateful for InsertStateful {
-  fn handle(&self, data_access: StatefulDataAccess) -> StatefulValue {
-    if let Some(op) = self.get_operation(&data_access) {
-      return self.handle_op(data_access, op);
-    }
-
-    StatefulValue::InsertMode(InsertStateful::default())
-  }
-
-  fn handle_op(&self, data_access: StatefulDataAccess, op: Operation) -> StatefulValue {
-    match op {
-      Operation::GotoNormalMode => self.goto_normal_mode(&data_access),
-      Operation::CursorMoveBy((_, _))
-      | Operation::CursorMoveUpBy(_)
-      | Operation::CursorMoveDownBy(_)
-      | Operation::CursorMoveLeftBy(_)
-      | Operation::CursorMoveRightBy(_)
-      | Operation::CursorMoveTo((_, _)) => self.cursor_move(&data_access, op),
-      Operation::CursorInsert(text) => self.cursor_insert(&data_access, text),
-      Operation::CursorDelete(n) => self.cursor_delete(&data_access, n),
-      _ => unreachable!(),
-    }
-  }
-}
-
-impl InsertStateful {
   pub fn cursor_delete(&self, data_access: &StatefulDataAccess, n: isize) -> StatefulValue {
-    let tree = data_access.tree.clone();
-    let mut tree = lock!(tree);
-    let current_window = tree.current_window_mut().unwrap();
-    let current_window_id = current_window.id();
-    let buffer = current_window.buffer().upgrade().unwrap();
-    let mut buffer = lock!(buffer);
-
-    cursor_ops::cursor_delete(&mut tree, current_window_id, buffer.text_mut(), n);
+    data_access.with_tree_buffer_window_id(|tree, buffer, current_window_id| {
+      cursor_ops::cursor_delete(tree, current_window_id, buffer.text_mut(), n);
+    });
 
     StatefulValue::InsertMode(InsertStateful::default())
   }
-}
 
-impl InsertStateful {
   pub fn cursor_insert(
     &self,
     data_access: &StatefulDataAccess,
     payload: CompactString,
   ) -> StatefulValue {
-    let tree = data_access.tree.clone();
-    let mut tree = lock!(tree);
-    let current_window = tree.current_window_mut().unwrap();
-    let current_window_id = current_window.id();
-    let buffer = current_window.buffer().upgrade().unwrap();
-    let mut buffer = lock!(buffer);
-
-    cursor_ops::cursor_insert(&mut tree, current_window_id, buffer.text_mut(), payload);
+    data_access.with_tree_buffer_window_id(|tree, buffer, current_window_id| {
+      cursor_ops::cursor_insert(tree, current_window_id, buffer.text_mut(), payload);
+    });
 
     StatefulValue::InsertMode(InsertStateful::default())
   }
-}
 
-impl InsertStateful {
   pub fn goto_normal_mode(&self, data_access: &StatefulDataAccess) -> StatefulValue {
-    let tree = data_access.tree.clone();
-    let mut tree = lock!(tree);
-    let current_window = tree.current_window_mut().unwrap();
-    let current_window_id = current_window.id();
-    let buffer = current_window.buffer().upgrade().unwrap();
-    let buffer = lock!(buffer);
+    data_access.with_tree_buffer_window_id(|tree, buffer, current_window_id| {
+      cursor_ops::cursor_move(
+        tree,
+        current_window_id,
+        buffer.text(),
+        Operation::CursorMoveBy((0, 0)),
+        false,
+      );
 
-    let op = Operation::CursorMoveBy((0, 0));
-    cursor_ops::cursor_move(&mut tree, current_window_id, buffer.text(), op, false);
-
-    let current_window = tree.current_window_mut().unwrap();
-    debug_assert!(current_window.cursor_id().is_some());
-    let _cursor_id = current_window.cursor_id().unwrap();
-    debug_assert!(current_window.cursor_mut().is_some());
-    let cursor = current_window.cursor_mut().unwrap();
-    debug_assert_eq!(_cursor_id, cursor.id());
-    cursor.set_style(&CursorStyle::SteadyBlock);
+      let current_window = tree.current_window_mut().unwrap();
+      debug_assert!(current_window.cursor_id().is_some());
+      let _cursor_id = current_window.cursor_id().unwrap();
+      debug_assert!(current_window.cursor_mut().is_some());
+      let cursor = current_window.cursor_mut().unwrap();
+      debug_assert_eq!(_cursor_id, cursor.id());
+      cursor.set_style(&CursorStyle::SteadyBlock);
+    });
 
     StatefulValue::NormalMode(super::NormalStateful::default())
   }
-}
 
-impl InsertStateful {
   pub fn cursor_move(&self, data_access: &StatefulDataAccess, op: Operation) -> StatefulValue {
-    let tree = data_access.tree.clone();
-    let mut tree = lock!(tree);
-    let current_window = tree.current_window_mut().unwrap();
-    let current_window_id = current_window.id();
-    let buffer = current_window.buffer().upgrade().unwrap();
-    let buffer = lock!(buffer);
-
-    cursor_ops::cursor_move(&mut tree, current_window_id, buffer.text(), op, true);
+    data_access.with_tree_buffer_window_id(|tree, buffer, current_window_id| {
+      cursor_ops::cursor_move(tree, current_window_id, buffer.text(), op, true);
+    });
 
     StatefulValue::InsertMode(InsertStateful::default())
   }

@@ -12,15 +12,16 @@
 //!
 //! * Quit state: The editor should quit on this state.
 
-use crate::buf::BuffersManagerArc;
+use crate::buf::{Buffer, BuffersManagerArc};
 use crate::content::TextContentsArc;
 use crate::state::StateArc;
 use crate::state::ops::Operation;
-use crate::ui::tree::TreeArc;
+use crate::ui::tree::{Inodeable, Tree, TreeArc, TreeNodeId};
 
 use crossterm::event::Event;
 
 // Re-export
+use crate::lock;
 pub use command_line_ex::CommandLineExStateful;
 pub use command_line_search_backward::CommandLineSearchBackwardStateful;
 pub use command_line_search_forward::CommandLineSearchForwardStateful;
@@ -75,6 +76,22 @@ impl StatefulDataAccess {
       contents,
       event,
     }
+  }
+
+  /// Access the current window's tree and buffer and pass the current window id to the closure.
+  /// This is a helper for operations that need to access the current window's data.
+  pub fn with_tree_buffer_window_id<F, R>(&self, f: F) -> R
+  where
+    F: FnOnce(&mut Tree, &mut Buffer, TreeNodeId) -> R,
+  {
+    let tree = self.tree.clone();
+    let mut tree = lock!(tree);
+    let current_window = tree.current_window_mut().unwrap();
+    let current_window_id = current_window.id();
+    let buffer = current_window.buffer().upgrade().unwrap();
+    let mut buffer = lock!(buffer);
+
+    f(&mut tree, &mut buffer, current_window_id)
   }
 }
 
