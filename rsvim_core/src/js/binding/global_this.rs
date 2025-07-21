@@ -2,4 +2,5 @@
 //! See WinterCG standard: <https://github.com/wintercg/proposal-common-minimum-api>
 //! See MDN javascript documents: <https://developer.mozilla.org/en-US/>
 
+pub mod js_command;
 pub mod timeout;

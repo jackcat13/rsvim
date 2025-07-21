@@ -17,6 +17,7 @@ use crate::prelude::*;
 use crate::state::StateArc;
 use crate::ui::tree::TreeArc;
 
+use compact_str::CompactString;
 use once_cell::sync::Lazy;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -25,6 +26,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Instant;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{error, trace};
+use crate::js::binding::global_this::js_command::JsCommandFuture;
 
 pub mod binding;
 pub mod err;
@@ -781,6 +783,15 @@ impl JsRuntime {
           EventLoopToJsRuntimeMessage::ExCommandReq(req) => {
             trace!("Receive ExCommandReq:{req:?}");
             debug_assert!(!state.pending_futures.contains_key(&req.future_id));
+            let command = req.source.as_str();
+            let js_prefix = "js";
+            if command.starts_with(js_prefix) {
+              let js_command = CompactString::new(
+                req.source[js_prefix.len()..req.source.len()].to_string(),
+              );
+              let js_future = JsCommandFuture::new(js_command);
+              futures.push(Box::new(js_future));
+            }
           }
         }
       }
