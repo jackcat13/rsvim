@@ -4,9 +4,7 @@ use crate::buf::{BuffersManager, BuffersManagerArc};
 use crate::cli::CliOpt;
 use crate::content::{TextContents, TextContentsArc};
 use crate::evloop::msg::WorkerToMasterMessage;
-use crate::js::msg::{
-  self as jsmsg, EventLoopToJsRuntimeMessage, JsRuntimeToEventLoopMessage,
-};
+use crate::js::msg::{self as jsmsg, CreateCommandFeedback, EventLoopToJsRuntimeMessage, JsRuntimeToEventLoopMessage};
 use crate::js::{JsRuntime, JsRuntimeOptions, SnapshotData};
 use crate::prelude::*;
 use crate::state::fsm::{Stateful, StatefulDataAccess, StatefulValue};
@@ -429,6 +427,14 @@ impl EventLoop {
               .await;
             trace!("Receive req timeout_req:{:?} - done", req.future_id);
           });
+        }
+        JsRuntimeToEventLoopMessage::CreateCommandFeedbackReq(req) => {
+          let trace_message = format!("Receive req create_command_feedback:{:?}", req);
+          trace!("{}", trace_message);
+          if let CreateCommandFeedback::Error(message) = req {
+              panic!("TODO : send the error message {message} to ui widget")
+          }
+          trace!("{} - done", trace_message);
         }
       }
     }

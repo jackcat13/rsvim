@@ -14,6 +14,7 @@ use crate::js::JsFutureId;
 /// [`JsRuntime`](crate::js::JsRuntime).
 pub enum JsRuntimeToEventLoopMessage {
   TimeoutReq(TimeoutReq),
+  CreateCommandFeedbackReq(CreateCommandFeedback),
 }
 
 // The message JsRuntime send to EventLoop }
@@ -61,6 +62,11 @@ impl TimeoutReq {
       duration,
     }
   }
+}
+
+#[derive(Debug)]
+pub enum CreateCommandFeedback {
+  Created, Error(CompactString)
 }
 
 #[derive(Debug)]

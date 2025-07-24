@@ -1,5 +1,11 @@
 export class Rsvim {
     opt = new RsvimOpt();
+    createCommand(name, command) {
+        if (!/^[A-Z]/.test(name)) {
+            throw new Error("Command name must begin with an uppercase letter");
+        }
+        __InternalRsvimGlobalObject.rsvim_create_command(name, command);
+    }
 }
 export class RsvimOpt {
     get wrap() {

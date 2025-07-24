@@ -17,6 +17,22 @@
  */
 
 /**
+ * Command callback function type
+ */
+type CommandCallback = (...args: any[]) => any;
+
+export interface IRsvim {
+  /**
+   * Create a new user command
+   *
+   * @param {string} name - Name of the command, must start with an uppercase letter
+   * @param {CommandCallback} command - Callback function or command string to execute
+   * @throws {Error} If the command name doesn't start with an uppercase letter
+   */
+  createCommand(name: string, command: CommandCallback): void;
+}
+
+/**
  * The `Rsvim` global object, it contains multiple sub fields:
  *
  * - `Rsvim.opt`: Global editor options.
@@ -30,8 +46,18 @@
  * @category Global Object
  * @hideconstructor
  */
-export class Rsvim {
+export class Rsvim implements IRsvim {
   readonly opt: RsvimOpt = new RsvimOpt();
+
+  public createCommand(name: string, command: CommandCallback): void {
+    // Validate command name
+    if (!/^[A-Z]/.test(name)) {
+      throw new Error("Command name must begin with an uppercase letter");
+    }
+
+    // @ts-ignore Ignore warning
+    __InternalRsvimGlobalObject.rsvim_create_command(name, command);
+  }
 }
 
 /**
