@@ -1,5 +1,5 @@
-use crate::js::msg::{CreateCommandFeedback, JsRuntimeToEventLoopMessage};
 use crate::js::JsRuntime;
+use crate::js::msg::{CreateCommandFeedback, JsRuntimeToEventLoopMessage};
 use compact_str::CompactString;
 
 /// Javascript `Rsvim.createCommand` API.
@@ -16,12 +16,13 @@ pub fn create_command(
 
   // Create function in JS runtime if does not already exist
   if !global.get(tc_scope, name).unwrap().is_undefined() {
-    let msg = format!("Command '{}' already exists", name.to_rust_string_lossy(tc_scope));
-    let msg = v8::String::new(tc_scope, &msg).unwrap();
-    let exception = v8::Exception::type_error(
-      tc_scope,
-      msg
+    let msg = format!(
+      "Command '{}' already exists and can't be created. It happened registering following function : {}",
+      name.to_rust_string_lossy(tc_scope),
+      command.to_rust_string_lossy(tc_scope)
     );
+    let msg = v8::String::new(tc_scope, &msg).unwrap();
+    let exception = v8::Exception::type_error(tc_scope, msg);
     tc_scope.throw_exception(exception);
   } else {
     let command = command.to_object(tc_scope).unwrap();
@@ -44,9 +45,9 @@ pub fn create_command(
   let current_handle = tokio::runtime::Handle::current();
   current_handle.spawn_blocking(move || {
     jsrt_to_mstr
-        .blocking_send(JsRuntimeToEventLoopMessage::CreateCommandFeedbackReq(
-          feedback
-        ))
-        .unwrap();
+      .blocking_send(JsRuntimeToEventLoopMessage::CreateCommandFeedbackReq(
+        feedback,
+      ))
+      .unwrap();
   });
 }

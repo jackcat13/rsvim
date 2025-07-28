@@ -66,7 +66,8 @@ impl TimeoutReq {
 
 #[derive(Debug)]
 pub enum CreateCommandFeedback {
-  Created, Error(CompactString)
+  Created,
+  Error(CompactString),
 }
 
 #[derive(Debug)]

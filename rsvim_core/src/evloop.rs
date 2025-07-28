@@ -4,7 +4,10 @@ use crate::buf::{BuffersManager, BuffersManagerArc};
 use crate::cli::CliOpt;
 use crate::content::{TextContents, TextContentsArc};
 use crate::evloop::msg::WorkerToMasterMessage;
-use crate::js::msg::{self as jsmsg, CreateCommandFeedback, EventLoopToJsRuntimeMessage, JsRuntimeToEventLoopMessage};
+use crate::js::msg::{
+  self as jsmsg, CreateCommandFeedback, EventLoopToJsRuntimeMessage,
+  JsRuntimeToEventLoopMessage,
+};
 use crate::js::{JsRuntime, JsRuntimeOptions, SnapshotData};
 use crate::prelude::*;
 use crate::state::fsm::{Stateful, StatefulDataAccess, StatefulValue};
@@ -14,16 +17,18 @@ use crate::ui::tree::*;
 use crate::ui::widget::command_line::CommandLine;
 use crate::ui::widget::cursor::Cursor;
 use crate::ui::widget::window::Window;
+use std::fmt::Debug;
 
 use crossterm::event::{Event, EventStream};
 use crossterm::{self, queue};
 use futures::StreamExt;
-use std::path::Path;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
 // use heed::types::U16;
+use crate::state::fsm::command_line_message::CommandLineMessageStateful;
 use std::io::Write;
 use std::io::{BufWriter, Stdout};
+use std::path::Path;
 use std::sync::Arc;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -429,10 +434,17 @@ impl EventLoop {
           });
         }
         JsRuntimeToEventLoopMessage::CreateCommandFeedbackReq(req) => {
-          let trace_message = format!("Receive req create_command_feedback:{:?}", req);
+          let trace_message =
+            format!("Receive req create_command_feedback:{:?}", req);
           trace!("{}", trace_message);
           if let CreateCommandFeedback::Error(message) = req {
-              panic!("TODO : send the error message {message} to ui widget")
+            self.stateful_machine = StatefulValue::CommandLineMessageMode(
+              CommandLineMessageStateful::with_message(
+                message,
+                self.tree.clone(),
+                self.contents.clone(),
+              ),
+            );
           }
           trace!("{} - done", trace_message);
         }
